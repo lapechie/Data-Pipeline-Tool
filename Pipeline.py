@@ -16,14 +16,18 @@ import subprocess
 
 class Pipeline:
 
-    def __init__(self, schedule, process, dep_on):
+    def __init__(self, schedule, process, dep_on, location, status, last_run):
 
         self.schedule = schedule
         self.process = process
         self.dep_on = dep_on
-        #self.location = None
+        self.location = location
+        self.status = status
+        self.last_run = last_run
         self.dep_df = self.create_dep_df() 
         self.graph = self.create_graph()
+
+        self.colour_map = []
 
         # empty lists to catch errors
         self.sdtout_list = []
@@ -51,8 +55,28 @@ class Pipeline:
     def read_df(self):
         pass
 
+    def set_colour_map(self):
+        # colour mapping based on status for visualisation
+        for index in range(len(self.schedule)):       
+
+            if self.schedule.iloc[index][self.status] == 'no status':
+                self.colour_map.append("tab:grey")
+            elif self.schedule.iloc[index][self.status] == 'success':
+                self.colour_map.append("tab:green")
+            elif self.schedule.iloc[index][self.status] == 'error':
+                self.colour_map.append("tab:red")
+            elif self.schedule.iloc[index][self.status] == 'dependency failed':
+                self.colour_map.append("tab:blue")
+            else:
+                self.colour_map.append("pink")
+
+        
+
     # visualise the pipeline
-    def draw(self, colour_map = None):
+    def draw(self):
+        
+        self.colour_map = []
+        self.set_colour_map()
 
         # plot the new graph to visualise the status of the schedule
         pos = graphviz_layout(self.graph, prog="dot")
@@ -63,7 +87,7 @@ class Pipeline:
                 arrows = True,
                 node_size = 1500,
                 width = 1.5,
-                node_color = colour_map,
+                node_color = self.colour_map,
                 node_shape = "o",
                 font_color = "white",
                 font_family = 'calibri bold',
@@ -90,29 +114,27 @@ class Pipeline:
     # run the pipeline
     def execute(self):
         # run the sorted process and catch errors
-
-
         for index in range(len(self.schedule)):
 
             # only run the process if it has no status
-            if self.schedule.iloc[index]['status'] == "no status":
+            if self.schedule.iloc[index][self.status] == "no status":
                 print("running ",self.schedule.iloc[index][self.process])
-                result = subprocess.run([ "python", self.schedule.iloc[index]['location']], capture_output=True)
+                result = subprocess.run(["python", self.schedule.iloc[index]['location']], capture_output=True)
                 # append the errors to the empty lists
                 self.sdtout_list.append(result.stdout)
                 self.stderr_list.append(result.stderr)
 
                 # if no errors occur, change the status to success and add the current date
                 if result.stderr == b'':
-                    self.schedule.at[index, 'status'] = 'success'
-                    self.schedule.at[index, 'last_run'] = datetime.date(datetime.now())
+                    self.schedule.at[index, self.status] = 'success'
+                    self.schedule.at[index, self.last_run] = datetime.date(datetime.now())
 
                 # if an error occurs, chnage the status to error, and do not run any nodes that depend on this process, change those status to "dependency failed"
                 else: 
-                    self.schedule.at[index, 'status'] = 'error'
-                    impacted_list = list(nx.dfs_tree(G, source=self.schedule.iloc[index]['process']))
-                    impacted_list.remove(self.schedule.iloc[index]['process'])
-                    self.schedule.loc[self.schedule['process'].isin(impacted_list), 'status'] = "dependency failed"
+                    self.schedule.at[index, self.status] = 'error'
+                    impacted_list = list(nx.dfs_tree(self.graph, source=self.schedule.iloc[index][self.process])) #turn into function???
+                    impacted_list.remove(self.schedule.iloc[index][self.process])
+                    self.schedule.loc[self.schedule[self.process].isin(impacted_list), self.status] = "dependency failed"
             else:
                 pass
 
