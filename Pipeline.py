@@ -1,7 +1,7 @@
 from datetime import datetime
-
 import pandas as pd
 import numpy as np
+
 # graph algorithms
 import networkx as nx
 
@@ -15,7 +15,22 @@ from networkx.drawing.nx_pydot import graphviz_layout
 import subprocess
 
 class Pipeline:
+    """
+    The Pipeline object....
 
+    Attributes: 
+        schedule (pandas.DataFrame, required): Description of arg_1 that can break onto the next line if needed.
+        process
+        dep_on
+        location
+        last_run
+        status
+        dep_df
+        graph
+        colour_map
+        sdtout_list
+        stderr_list
+    """
     def __init__(self, schedule, process, dep_on, location, status, last_run):
 
         self.schedule = schedule
@@ -27,23 +42,34 @@ class Pipeline:
         self.dep_df = self.create_dep_df() 
         self.graph = self.create_graph()
 
+        # empty list to map node colours
         self.colour_map = []
 
         # empty lists to catch errors
         self.sdtout_list = []
         self.stderr_list = []
 
-    def create_dep_df(self): # do i need to add params?
+    def create_dep_df(self):
+        """ 
+        Uses the schedule to create a dependency dataframe. 
+        This can be used to create a graph object in networkx 
 
-        # # modify to create dependency dataframe fit for networkx
+        Returns:    
+            pandas.DataFrame
+        """
         dep_df = self.schedule[[self.process, self.dep_on]]
-        # # expand the dep_on row into mutiple rows based on ","
+        # expand the dep_on row into mutiple rows based on ","
         dep_df = dep_df.set_index([self.process]).apply(lambda x: x.str.split(',').explode()).reset_index()
         dep_df = dep_df.dropna()
         return dep_df
 
     def create_graph(self):
-        # create a graph object using the dataframe
+        """ 
+        Creates a graph object from a dependency dataframe. 
+
+        Returns:    
+            networkx.DiGraph
+        """
         graph = nx.from_pandas_edgelist(self.dep_df,
                                         source = self.dep_on,
                                         target = self.process,
@@ -51,12 +77,13 @@ class Pipeline:
         return graph
         
 
-    # read a dataframe and transform into a shape that is fit for networkx
     def read_df(self):
         pass
 
     def set_colour_map(self):
-        # colour mapping based on status for visualisation
+        """ 
+        Maps the status of each process to a colour 
+        """
         for index in range(len(self.schedule)):       
 
             if self.schedule.iloc[index][self.status] == 'no status':
@@ -70,17 +97,17 @@ class Pipeline:
             else:
                 self.colour_map.append("pink")
 
-        
-
-    # visualise the pipeline
+    
     def draw(self):
-        
+        """ 
+        Plots the Pipeline
+        """
         self.colour_map = []
         self.set_colour_map()
 
-        # plot the new graph to visualise the status of the schedule
         pos = graphviz_layout(self.graph, prog="dot")
         plt.figure(3 ,figsize=(12, 4), dpi=80)
+        
         nx.draw(self.graph,
                 pos,
                 with_labels = True,
@@ -97,23 +124,47 @@ class Pipeline:
         plt.show()
         
     
-    # toplogical sort
+    
     def topological_sort(self):
-        # sort the schedule dataframe using graph object
+        """ 
+        Sort the schedule dataframe
+        """
         self.schedule[self.process] = pd.Categorical(self.schedule[self.process], list(nx.topological_sort(self.graph)))
         self.schedule = self.schedule.sort_values(self.process).reset_index(drop=True)
         
 
     def forward_search(self, process):
+        """
+        Travserses downstream to identify processes that depend on a process
+
+        Args:
+            process (str): process to start the downstream search 
+
+        Returns:
+            list
+        """
         impacted_list = list(nx.dfs_tree(self.graph, source=self.schedule.loc[self.schedule[self.process] == process][self.process].values.item()))
         return impacted_list
 
     def backward_search(self):
+        """
+        Travserses upstream to identify processes that a process depends on
+
+        Args:
+            process (str): process to start the upstream search 
+
+        Returns:
+            list
+        """
         pass
     
-    # run the pipeline
+ 
     def execute(self):
-        # run the sorted process and catch errors
+        """
+        Runs the schedule, captures errors, last_run and changes the status of the each process
+        """
+        self.topological_sort()
+        
         for index in range(len(self.schedule)):
 
             # only run the process if it has no status
@@ -132,7 +183,7 @@ class Pipeline:
                 # if an error occurs, chnage the status to error, and do not run any nodes that depend on this process, change those status to "dependency failed"
                 else: 
                     self.schedule.at[index, self.status] = 'error'
-                    impacted_list = list(nx.dfs_tree(self.graph, source=self.schedule.iloc[index][self.process])) #turn into function???
+                    impacted_list = list(nx.dfs_tree(self.graph, source=self.schedule.iloc[index][self.process])) 
                     impacted_list.remove(self.schedule.iloc[index][self.process])
                     self.schedule.loc[self.schedule[self.process].isin(impacted_list), self.status] = "dependency failed"
             else:

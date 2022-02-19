@@ -1,0 +1,14 @@
+process,dep_on,location,status,last_run
+extract_2,,scripts/extract_2.py,no status,never
+extract_3,,scripts/extract_3.py,no status,never
+transform_1,"extract_1,extract_2",scripts/transform_1.py,no status,never
+transform_2,extract_1,scripts/transform_2.py,no status,never
+transform_3,"transform_1,transform_4",scripts/transform_3.py,no status,never
+transform_4,extract_3,scripts/transform_4.py,no status,never
+transform_5,transform_4,scripts/transform_5.py,no status,never
+transform_6,transform_2,scripts/transform_6.py,no status,never
+extract_1,,scripts/extract_1.py,no status,never
+load_1,transform_2,scripts/load_1.py,no status,never
+load_2,"transform_5,transform_6",scripts/load_2.py,no status,never
+load_3,transform_3,scripts/load_3.py,no status,never
+load_4,transform_4,scripts/load_4.py,no status,never
